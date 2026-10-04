@@ -308,6 +308,14 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
   -o /tmp/torget-glass-claim-test
 /tmp/torget-glass-claim-test
 
+# Ljudets regler och tongenerator: ren C, delad av motorn på panelen.
+cc -std=c11 -Wall -Wextra -Werror -O1 \
+  ../components/torget_audio/audio_policy.c \
+  test_audio_policy.c \
+  -lm \
+  -o /tmp/torget-audio-policy-test
+/tmp/torget-audio-policy-test
+
 cc -std=c11 -Wall -Wextra -Werror -O1 \
   ../components/app_time/time_core.c \
   test_time_core.c \
