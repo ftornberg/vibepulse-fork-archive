@@ -112,8 +112,9 @@ static bool bring_up(chain *c) {
 static void chime_task(void *arg) {
   tg_audio_cue cue = (tg_audio_cue)(intptr_t)arg;
   size_t before = dma_largest();
-  bool ok = false;
+  tg_audio_outcome outcome = TG_AUDIO_OUTCOME_INIT_FAILED;
   if (!tg_audio_dma_ok(before)) {
+    outcome = TG_AUDIO_OUTCOME_NO_MEMORY; /* en vägran, inte ett fel */
     ESP_LOGW(TAG, "ljud nekat: DMA-block %u B < %u B", (unsigned)before,
              (unsigned)TG_AUDIO_DMA_NEEDED);
   } else {
@@ -126,11 +127,15 @@ static void chime_task(void *arg) {
         esp_codec_dev_write(c.dev, buf, (int)(n * sizeof buf[0]));
         off += n;
       }
+      /* Tystnad som täcker alla DMA-buffertar som ännu inte spelats, så att
+       * nedrivningen inte klipper sista tonens nedtoning. */
       for (uint32_t i = 0; i < CHUNK_FRAMES; i++) buf[i] = 0;
-      esp_codec_dev_write(c.dev, buf, (int)(20u * TG_AUDIO_RATE / 1000u * sizeof buf[0]));
-      ESP_LOGI(TAG, "spelade %s: DMA-block före %u, under %u B", "DONE",
-               (unsigned)before, (unsigned)during);
-      ok = true;
+      for (uint32_t s = 0; s < TG_AUDIO_TAIL_FRAMES; s += CHUNK_FRAMES)
+        esp_codec_dev_write(c.dev, buf, (int)(CHUNK_FRAMES * sizeof buf[0]));
+      ESP_LOGI(TAG, "spelade %s: DMA-block före %u, under %u B, stack kvar %u B",
+               "DONE", (unsigned)before, (unsigned)during,
+               (unsigned)uxTaskGetStackHighWaterMark(NULL));
+      outcome = TG_AUDIO_OUTCOME_PLAYED;
     } else {
       ESP_LOGW(TAG, "ljudstart misslyckades; river ned");
     }
@@ -139,7 +144,7 @@ static void chime_task(void *arg) {
     if (after + 256u < before)
       ESP_LOGW(TAG, "möjlig ljudläcka: DMA-block %u -> %u B", (unsigned)before, (unsigned)after);
   }
-  if (tg_audio_after_attempt(&s_failures, ok)) {
+  if (tg_audio_after_outcome(&s_failures, outcome)) {
     atomic_store(&s_disabled, true);
     ESP_LOGE(TAG, "ljudet avstängt till nästa boot efter %u fel i rad",
              (unsigned)TG_AUDIO_MAX_FAILURES);

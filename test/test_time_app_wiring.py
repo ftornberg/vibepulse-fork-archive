@@ -123,5 +123,9 @@ assert "xQueueCreate" not in audio_c, "no permanent audio queue"
 assert "vTaskDelete(NULL)" in audio_c, "the chime task ends itself"
 assert "i2s_del_channel" in audio_c and "esp_codec_dev_delete" in audio_c
 assert "TORGET_BOARD_241_V2" in audio_c and "TK_TID_SOUND" in audio_c
+assert "tg_audio_after_outcome" in audio_c and "tg_audio_after_attempt(" not in audio_c, (
+    "the engine must count outcomes, so a memory refusal never disables sound"
+)
+assert "TG_AUDIO_TAIL_FRAMES" in audio_c, "drain the queued DMA before teardown"
 
 print("OK: TID is opt-in, 2.16-only and taps are short clicks")

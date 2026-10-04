@@ -22,7 +22,9 @@ step only:
 
 - **One chime when a timer or a pomodoro phase ends**, played once.
 - **Silent during the night schedule** (23:00 to 07:00 by default, the same
-  schedule as night dimming; it applies only with a valid clock).
+  schedule as night dimming; it applies only with a valid clock). It follows
+  night dimming itself, including the LABS NIGHT DIM switch (ruled 2026-10-04
+  from the owner's "silent while night dimming").
 - **A speaker symbol in TID** turns sound on and off; the choice survives a
   restart. Turning sound on plays the chime once, which is both the
   confirmation and the physical test.

@@ -92,7 +92,9 @@ appears, and edit the three `#define` values.
 When a timer or a pomodoro phase ends, TID plays three rising notes (C6, E6,
 G6, about 0.6 s), also while another app is on the glass. It stays silent
 during the night schedule (the same 23:00 to 07:00 as night dimming, with a
-valid clock) and while the maintenance window is open.
+valid clock) and while the maintenance window is open. Silence follows night
+dimming itself: with **NIGHT DIM** switched off in SETTINGS → LABS, the chime
+also plays at night (the owner asked for "silent while night dimming").
 
 - **The speaker symbol** at the bottom of the clock and the timer's preset
   page turns sound on and off; the choice survives a restart. Turning it on

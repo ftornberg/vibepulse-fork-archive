@@ -60,8 +60,9 @@ class TimeAppSimTests(unittest.TestCase):
             out = run.stdout
             marker = out.find("qa: hidden-timer")
             self.assertGreaterEqual(marker, 0, out)
-            self.assertIn("audio: DONE", out[marker:],
-                          "a TID timer ending behind VibePulse did not chime")
+            self.assertEqual(out[marker:].count("audio: DONE"), 1,
+                             "a TID timer ending behind VibePulse must chime "
+                             "exactly once, also across the return to TID")
             # Turning sound back on plays the chime once as a confirmation.
             on = out.find("qa: sound-on")
             self.assertGreaterEqual(on, 0, out)

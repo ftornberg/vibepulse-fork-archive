@@ -24,6 +24,10 @@
 #define TG_AUDIO_DMA_NEEDED \
   (TG_AUDIO_FLUSH_BYTES + TG_AUDIO_DMA_BYTES + TG_AUDIO_DMA_MARGIN)
 #define TG_AUDIO_MAX_FAILURES 3u
+/* Tystnad efter sista tonen: minst alla DMA-buffertar (3 x 256 ramar) som kan
+ * ligga kvar när sista skrivningen returnerar, annars klipper nedrivningen
+ * sista tonens nedtoning (ett klick). 1024 ramar = 64 ms. */
+#define TG_AUDIO_TAIL_FRAMES 1024u
 
 typedef struct {
   bool built;     /* TK_TID_SOUND på och kortet är 2.16 */
@@ -52,6 +56,16 @@ bool tg_audio_dma_ok(size_t largest_block);
 /* Efter ett försök: nollställer vid lyckat, räknar upp vid fel. Svarar true
  * när ljudet ska stängas av till nästa boot (TG_AUDIO_MAX_FAILURES i rad). */
 bool tg_audio_after_attempt(uint8_t *consecutive_failures, bool ok);
+
+/* Hur ett försök slutade. Bara ett STARTFEL räknas mot tregångersregeln:
+ * nekat för minne (DMA-marginalen) är en vägran, inte ett fel, och ska inte
+ * kunna stänga av ljudet till nästa boot (slutgranskningen 2026-10-04). */
+typedef enum {
+  TG_AUDIO_OUTCOME_PLAYED = 0,
+  TG_AUDIO_OUTCOME_INIT_FAILED,
+  TG_AUDIO_OUTCOME_NO_MEMORY,
+} tg_audio_outcome;
+bool tg_audio_after_outcome(uint8_t *consecutive_failures, tg_audio_outcome o);
 
 /* Antal ramar en signal har; 0 för en okänd. */
 uint32_t tg_audio_cue_frames(int cue);

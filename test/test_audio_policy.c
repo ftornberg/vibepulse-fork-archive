@@ -111,8 +111,27 @@ static void test_render(void) {
   free(chunked);
 }
 
+static void test_outcomes(void) {
+  uint8_t f = 0;
+  /* Only an init failure counts toward disabling sound (spec: memory and
+   * init failure are separate refusals; final review 2026-10-04). */
+  check("no memory never counts", !tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_NO_MEMORY) && f == 0);
+  for (int i = 0; i < 5; i++) tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_NO_MEMORY);
+  check("five memory refusals keep sound on", f == 0);
+  check("init failure 1", !tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_INIT_FAILED));
+  check("memory refusal between keeps the count", !tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_NO_MEMORY) && f == 1);
+  check("init failure 2", !tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_INIT_FAILED));
+  check("init failure 3 disables", tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_INIT_FAILED));
+  f = 2;
+  check("played resets", !tg_audio_after_outcome(&f, TG_AUDIO_OUTCOME_PLAYED) && f == 0);
+  /* The tail must cover every DMA buffer still queued when the last write
+   * returns, or teardown cuts the last note's release ramp. */
+  check("tail covers the queued DMA", TG_AUDIO_TAIL_FRAMES >= 3u * 256u);
+}
+
 int main(void) {
   test_verdicts();
+  test_outcomes();
   test_dma_gate();
   test_failures();
   test_render();

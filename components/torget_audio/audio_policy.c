@@ -59,6 +59,11 @@ bool tg_audio_after_attempt(uint8_t *consecutive_failures, bool ok) {
   return *consecutive_failures >= TG_AUDIO_MAX_FAILURES;
 }
 
+bool tg_audio_after_outcome(uint8_t *consecutive_failures, tg_audio_outcome o) {
+  if (o == TG_AUDIO_OUTCOME_NO_MEMORY) return false;
+  return tg_audio_after_attempt(consecutive_failures, o == TG_AUDIO_OUTCOME_PLAYED);
+}
+
 uint32_t tg_audio_cue_frames(int cue) {
   if (cue != TG_AUDIO_CUE_DONE) return 0;
   uint32_t ms = 0;
