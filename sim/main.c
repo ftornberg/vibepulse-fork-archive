@@ -827,6 +827,13 @@ static void qa_key3_tap(void) {
 static int sim_orientation;
 int torget_orientation(void) { return sim_orientation; }
 
+/* Bänken har ingen högtalare: ljudet loggas så att testerna kan se det. */
+bool torget_audio_play(tg_audio_cue cue) {
+  printf("audio: %s\n", cue == TG_AUDIO_CUE_DONE ? "DONE" : "?");
+  fflush(stdout);
+  return true;
+}
+
 /* Tangent 1-4: Solelkollen-fixtur. T: mata VibePulse. S: nästa agentläge.
  * L: launchern. [ och ] bläddrar VibePulse-sidor; N byter app (KEY3:s
  * appväxling utan gest). M: nästa Max Tracker-fixtur. G: simulera en ny
