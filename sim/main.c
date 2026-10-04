@@ -2031,6 +2031,26 @@ static int run_time_app_captures(void) {
   usage_screen_apply_agent(&waiting, wait_us);
   usage_screen_tick(wait_us + 46000000LL);
   time_frame(TG_TIME_ROT_CLOCK, "time-clock-attention");
+
+  /* Ljudet (spec 2026-10-02): av ger en överstruken högtalare, på spelar
+   * signalen en gång. Sedan en timer som går ut BAKOM VibePulse och ändå ska
+   * låta, eftersom bevakningen går även när TID är dold. */
+  usage_screen_apply_agent(&waiting, wait_us + 50000000LL);
+  tk_agent_monitor_dismiss_current();
+  usage_screen_tick(wait_us + 51000000LL);
+  time_app_qa_speaker();
+  time_frame(TG_TIME_ROT_CLOCK, "time-clock-sound-off");
+  printf("qa: sound-on\n");
+  time_app_qa_speaker();
+  sim_orientation = TG_TIME_ROT_TIMER;
+  time_app_qa_refresh();
+  time_app_qa_preset(0);
+  torget_app_show(SIM_APP_VIBEPULSE);
+  printf("qa: hidden-timer\n");
+  fflush(stdout);
+  time_app_qa_advance(21LL * 60 * 1000000);
+  for (int i = 0; i < 12; i++) { lv_timer_handler(); lv_delay_ms(100); }
+  torget_app_show(idx);
   return capture_failures == 0 ? 0 : 1;
 }
 #endif

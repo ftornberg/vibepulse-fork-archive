@@ -17,7 +17,7 @@ FRAMES = [
     "pomodoro-idle", "pomodoro-running", "pomodoro-paused", "pomodoro-done",
     "done-over-clock", "pomodoro-break",
     "timer-select", "timer-running", "timer-done",
-    "clock-attention",
+    "clock-attention", "clock-sound-off",
 ]
 
 
@@ -54,6 +54,18 @@ class TimeAppSimTests(unittest.TestCase):
                                 "an unset clock must not look like a set one")
             self.assertNotEqual(images["clock-attention"], images["clock"],
                                 "Claude waiting must show its icon on the clock")
+            self.assertNotEqual(images["clock-sound-off"], images["clock"],
+                                "sound off must show a crossed speaker")
+            # A timer that ends while VibePulse is in front must still chime.
+            out = run.stdout
+            marker = out.find("qa: hidden-timer")
+            self.assertGreaterEqual(marker, 0, out)
+            self.assertIn("audio: DONE", out[marker:],
+                          "a TID timer ending behind VibePulse did not chime")
+            # Turning sound back on plays the chime once as a confirmation.
+            on = out.find("qa: sound-on")
+            self.assertGreaterEqual(on, 0, out)
+            self.assertIn("audio: DONE", out[on:marker])
 
 
 if __name__ == "__main__":
