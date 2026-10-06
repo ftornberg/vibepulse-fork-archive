@@ -691,7 +691,8 @@ the seconds, always moving clockwise, or shows the time left.
 </p>
 
 Tap to start, pause and resume; a long press opens the launcher. When a
-timer ends it can chime (three rising notes, silent at night), toggled by the
+timer ends it can chime (three rising notes, two falling ones when a pomodoro
+break is over, silent at night), toggled by the
 speaker symbol and built in with `TK_TID_SOUND`. A NEEDS YOU
 alert still reaches you: the panel switches to VibePulse for the question and
 returns to TID after the answer. TID is off by default (`-DTORGET_WITH_TIME=ON`

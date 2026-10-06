@@ -16,6 +16,9 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
   (2026-10-05): all three notes clear at volume 45, ten chimes with the DMA
   margin intact. Every chime leads with 160 ms of silence so the amplifier
   wakes before the first note.
+- **A pomodoro break ends with its own cue.** Two falling, lower notes (G5,
+  E5) tell "back to work" apart from the three rising notes that end a focus
+  phase or a timer. Host- and simulator-tested; not yet heard on a panel.
 - **The waiting pulse comes forward too, and TID shows who is waiting.**
   When Claude finishes an answer, asks a question or needs permission, its
   pulsing NEEDS YOU card now borrows the glass from another app for its pulse
