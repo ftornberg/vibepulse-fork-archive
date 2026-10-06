@@ -8,7 +8,7 @@ on the [releases page](https://github.com/niclasvestlund-YT/vibepulse/releases).
 ### Added
 
 - **TID can chime.** Three rising notes (C6, E6, G6) when a timer or a
-  pomodoro phase ends, also while another app is on the glass; silent during
+  focus phase ends, also while another app is on the glass; silent during
   the night schedule and the maintenance window. A speaker symbol in TID turns
   it on and off. A new platform engine, `components/torget_audio`, borrows
   I2S and the ES8311 codec per chime behind a DMA-margin check and returns
