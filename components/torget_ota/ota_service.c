@@ -461,10 +461,13 @@ static void maintenance_ui_task(void *arg) {
      * ur tg_notice_update, och torget_ota_ui_set hoppar över en ritning när
      * UI-låset är upptaget. Frågan ställs därför om varje poll tills glaset
      * stämmer (döda pillar 2026-10-07, docs/lessons.md). */
-    switch (tg_notice_glass(&notice, torget_ota_ui_notice_visible(), busy)) {
+    switch (tg_notice_glass(&notice, torget_ota_ui_notice_visible(),
+                            torget_ota_ui_visible(), busy)) {
       case TG_NOTICE_SHOW:
-        torget_ota_ui_set_version(announced);
-        torget_ota_ui_set(TG_OTA_UI_NOTICE, 0, 0);
+        /* Versionen först, och notisen bara om den raden gick fram: annars
+         * stämmer glaset med policyn och ingen gör om en gammal versionsrad. */
+        if (torget_ota_ui_set_version(announced))
+          torget_ota_ui_set(TG_OTA_UI_NOTICE, 0, 0);
         break;
       case TG_NOTICE_HIDE:
         torget_ota_ui_set(TG_OTA_UI_HIDDEN, 0, 0);

@@ -224,7 +224,7 @@ assert "tg_button_update" in main_c, "KEY3 must go through tg_button_update"
 assert "key3_was_down" not in main_c, (
     "the raw KEY3 edge check must be replaced by the button policy"
 )
-assert "tg_notice_glass(&notice, torget_ota_ui_notice_visible()" in service, (
+assert re.search(r"tg_notice_glass\(&notice, torget_ota_ui_notice_visible\(\),\s*torget_ota_ui_visible\(\), busy\)", service), (
     "the takeover must be reconciled against the glass every poll, never "
     "driven by a one-shot SHOW/HIDE edge (dead pills 2026-10-07)"
 )

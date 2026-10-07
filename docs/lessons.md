@@ -1397,8 +1397,9 @@ edge. The console shows that lock timing out several times a minute (OBS-44).
 lost in the reset; the bug is established from the code and reproduces the
 symptom exactly, the cause of that one evening is inferred. **Fix:** the glass
 is reconciled against the policy every poll with the pure, host-tested
-`tg_notice_glass(policy, glass_shows_notice, busy)`; a snooze now logs
-`notisen avfärdad med ett tryck`. **Rule:** when a UI call may skip its work
+`tg_notice_glass`, which also hides a countdown ring left behind when the
+window closed and redraws a takeover whose version line did not get through; a
+snooze now logs `notisen avfärdad med ett tryck`. **Rule:** when a UI call may skip its work
 (a timed lock, a dedupe), drive it from the state it should reach, asked again
 every poll, never from the event that changed the state. And test the tap that
 says no: the policy test asserted "freshly dismissed stays hidden" by checking

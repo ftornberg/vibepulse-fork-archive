@@ -1042,5 +1042,5 @@ holds the lock, for how long at worst, and whether touch input waits behind it.
 one next to the `heap:` probe; name the caller in the timeout line (a wrapper
 around `torget_ui_try_lock` that logs its tag at warning level instead of the
 adapter's anonymous error); then decide whether the tokens redraw should be
-split. Audit the remaining timed callers (`wifi_setup_ui.c`, `boot_screen.c`,
-`torget_ota_ui_set_version`) for the same one-shot assumption.
+split. Audit the remaining timed callers (`wifi_setup_ui.c`, `boot_screen.c`) for the
+same one-shot assumption.
