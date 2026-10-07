@@ -7,7 +7,7 @@ set(TK_APP_TOKEN_SRCS
        "agent_status_source_policy.c"
        "agent_monitor.c" "agent_assets.c"
        "github_status_parse.c" "project_star_popup_policy.c"
-       "merge_queue_parse.c" "merge_queue_policy.c"
+       "merge_queue_parse.c" "merge_queue_policy.c" "strict_json.c"
        "project_star_assets.c" "project_star_chime.c" "project_star_popup.c"
        "agent_net_policy.c" "tokens_net_recovery_policy.c"
        "poll_backoff_policy.c"

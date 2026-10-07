@@ -1938,6 +1938,34 @@ static int run_glass_claim_qa(void) {
   usage_screen_tick(pulse_us + 46000000LL);
   torget_wifi_status_foreground();
   dump_frame("glass-pulse-returned");
+
+  /* Ready to merge: same 45 s claim in its own green. The idle snapshot
+   * clears the waiting card first so the surface is free. A tick inside the
+   * animation's last 0.6 s (37 x 1200 ms = 44.4 s < 45 s) must not start a
+   * second run, and after 45 s nothing may still breathe (review of #28). */
+  size_t m_len = 0;
+  char *m_json = read_fixture("merge-queue-one.json", &m_len);
+  tk_merge_queue merge;
+  bool m_ok = m_json && tk_merge_queue_parse(m_json, m_len, &merge);
+  free(m_json);
+  if (!m_ok) return 2;
+  int64_t merge_us = pulse_us + 60000000LL;
+  usage_screen_apply_agent(&idle, merge_us);
+  tk_agent_monitor_dismiss_current();
+  torget_launcher_open();
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-before");
+  tk_agent_monitor_apply_merge_queue(&merge, merge_us + 1000);
+  dump_frame("glass-merge-alert");
+  usage_screen_tick(merge_us + 1000 + 44800000LL);
+  dump_frame("glass-merge-held");
+  usage_screen_tick(merge_us + 1000 + 46000000LL);
+  torget_wifi_status_foreground();
+  dump_frame("glass-merge-returned");
+  if (tk_agent_monitor_merge_pulse_running()) {
+    printf("FAIL: the merge pulse still runs after its 45 s\n");
+    capture_failures++;
+  }
   return capture_failures == 0 ? 0 : 1;
 }
 

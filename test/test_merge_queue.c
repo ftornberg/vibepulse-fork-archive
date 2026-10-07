@@ -45,9 +45,24 @@ static tk_merge_queue queue_of(int count, const char *const *projects,
   for (int i = 0; i < listed; i++) {
     snprintf(q.prs[i].project, sizeof q.prs[i].project, "%s", projects[i]);
     q.prs[i].number = numbers[i];
+    /* Every listed project answered (it listed something). */
+    q.up_projects[q.up_count++] = tk_mq_project_key(projects[i]);
   }
   return q;
 }
+
+static void source_up(tk_merge_queue *q, const char *project) {
+  q->up_projects[q->up_count++] = tk_mq_project_key(project);
+}
+
+/* tk_mq_apply may extend the queue in place: always hand it a fresh copy. */
+static bool apply(tk_mq_state *s, const tk_merge_queue *q, uint64_t now) {
+  tk_merge_queue copy = *q;
+  return tk_mq_apply(s, &copy, now);
+}
+
+/* Show the card at `now` the way the renderer does when it is visible. */
+static void shown(tk_mq_state *s, uint64_t now) { tk_mq_shown(s, now); }
 
 static void test_parse(void) {
   tk_merge_queue value;
@@ -138,69 +153,208 @@ static void test_policy(void) {
                          tk_mq_lead(&s) == NULL);
 
   tk_merge_queue q = queue_of(1, p2, n2, 1, 0);
-  check("first PR pulses", tk_mq_apply(&s, &q, 1000));
-  check("pulse phase", tk_mq_phase_at(&s, 1000) == TK_MQ_PULSE);
-  check("pulse lasts the lease",
-        tk_mq_phase_at(&s, 1000 + TK_MQ_PULSE_MS - 1) == TK_MQ_PULSE &&
-        tk_mq_phase_at(&s, 1000 + TK_MQ_PULSE_MS) == TK_MQ_STATIC);
+  check("first PR is news", apply(&s, &q, 1000));
+  check("pulse owed before it is shown",
+        tk_mq_phase_at(&s, 999999) == TK_MQ_PULSE);
+  uint32_t epoch = s.pulse_epoch;
+  shown(&s, 2000);
+  check("shown starts one pulse", s.pulse_epoch == epoch + 1);
+  shown(&s, 3000);
+  check("showing again starts no second pulse", s.pulse_epoch == epoch + 1);
+  check("pulse lasts the lease from when shown",
+        tk_mq_phase_at(&s, 2000 + TK_MQ_PULSE_MS - 1) == TK_MQ_PULSE &&
+        tk_mq_phase_at(&s, 2000 + TK_MQ_PULSE_MS) == TK_MQ_STATIC);
   check("lead is the PR", tk_mq_lead(&s) && tk_mq_lead(&s)->number == 134);
 
-  check("same list again does not re-pulse",
-        !tk_mq_apply(&s, &q, 50000) &&
+  check("same list again is no news",
+        !apply(&s, &q, 50000) &&
         tk_mq_phase_at(&s, 50000) == TK_MQ_STATIC);
 
   tk_merge_queue two = queue_of(2, p2, n2, 2, 0);
-  check("a new PR re-pulses", tk_mq_apply(&s, &two, 60000) &&
-                              tk_mq_phase_at(&s, 60000) == TK_MQ_PULSE);
+  check("a new PR is news", apply(&s, &two, 60000) &&
+                            tk_mq_phase_at(&s, 60000) == TK_MQ_PULSE);
+  shown(&s, 60000);
 
   tk_mq_dismiss(&s);
   check("dismiss hides", tk_mq_phase_at(&s, 60001) == TK_MQ_HIDDEN &&
                          tk_mq_lead(&s) == NULL);
-  check("dismissed list stays down", !tk_mq_apply(&s, &two, 70000) &&
+  check("dismissed list stays down", !apply(&s, &two, 70000) &&
                                      tk_mq_phase_at(&s, 70000) ==
                                          TK_MQ_HIDDEN);
 
-  /* An incomplete payload drops gaffel; its return is not news. */
-  tk_merge_queue partial = queue_of(1, p2, n2, 1, 1);
-  check("incomplete drop", !tk_mq_apply(&s, &partial, 80000));
-  check("source back is not news", !tk_mq_apply(&s, &two, 90000) &&
-                                   tk_mq_phase_at(&s, 90000) ==
-                                       TK_MQ_HIDDEN);
-
   /* A complete list without gaffel #7: merged. Reopened later = news. */
   tk_merge_queue merged = queue_of(1, p2, n2, 1, 0);
-  check("merged PR forgotten", !tk_mq_apply(&s, &merged, 100000));
-  check("reopened PR pulses", tk_mq_apply(&s, &two, 110000));
+  check("merged PR forgotten", !apply(&s, &merged, 100000));
+  check("reopened PR is news", apply(&s, &two, 110000));
   check("lead is the unseen one",
         tk_mq_lead(&s) && tk_mq_lead(&s)->number == 7);
 
   tk_merge_queue none = queue_of(0, p2, n2, 0, 0);
-  check("empty queue hides", !tk_mq_apply(&s, &none, 120000) &&
+  check("empty queue hides", !apply(&s, &none, 120000) &&
                              tk_mq_phase_at(&s, 120000) == TK_MQ_HIDDEN);
 
   tk_merge_queue off;
   memset(&off, 0, sizeof off);
   tk_mq_init(&s);
-  check("disabled never shows", !tk_mq_apply(&s, &off, 1) &&
+  check("disabled never shows", !apply(&s, &off, 1) &&
                                 tk_mq_phase_at(&s, 1) == TK_MQ_HIDDEN);
-
-  /* The unseen PR merges while an already seen one stays: still up. */
-  tk_mq_init(&s);
-  tk_merge_queue first = queue_of(1, p2, n2, 1, 0);
-  tk_mq_apply(&s, &first, 0);
-  tk_mq_dismiss(&s);
-  tk_mq_apply(&s, &two, 10);
-  static const char *const only_kvitt[] = {"kvitt"};
-  static const int only_134[] = {134};
-  tk_merge_queue left = queue_of(1, only_kvitt, only_134, 1, 0);
-  tk_mq_apply(&s, &left, 20);
-  check("stays up leading with the first", tk_mq_lead(&s) &&
-                                           tk_mq_lead(&s)->number == 134);
 
   tk_mq_pr a = {.number = 1}, b = {.number = 1};
   snprintf(a.project, sizeof a.project, "kvitt");
   snprintf(b.project, sizeof b.project, "gaffel");
   check("key separates projects", tk_mq_key(&a) != tk_mq_key(&b));
+}
+
+/* Review finding 2: dismiss #134, #17 arrives and merges untapped, the list
+ * is back to only #134. The card must not come back for #134. */
+static void test_dismissed_does_not_return(void) {
+  static const char *const p[] = {"kvitt", "kvitt"};
+  static const int n[] = {134, 17};
+  tk_mq_state s;
+  tk_mq_init(&s);
+  tk_merge_queue first = queue_of(1, p, n, 1, 0);
+  apply(&s, &first, 0);
+  shown(&s, 0);
+  tk_mq_dismiss(&s);
+  tk_merge_queue both = queue_of(2, p, n, 2, 0);
+  check("#17 is news", apply(&s, &both, 10));
+  check("leads with #17", tk_mq_lead(&s) && tk_mq_lead(&s)->number == 17);
+  shown(&s, 10);
+  check("#17 merged: card goes",
+        !apply(&s, &first, 20) &&
+        tk_mq_phase_at(&s, 20) == TK_MQ_HIDDEN && tk_mq_lead(&s) == NULL);
+}
+
+/* Review finding 4: an orchestrator restart (incomplete, empty list) must
+ * neither hide an undismissed card nor replay it as news on return. */
+static void test_incomplete_keeps_and_does_not_replay(void) {
+  static const char *const p[] = {"gaffel", "kvitt"};
+  static const int n[] = {7, 134};
+  tk_mq_state s;
+  tk_mq_init(&s);
+  tk_merge_queue one = queue_of(1, p, n, 1, 0);
+  apply(&s, &one, 0);
+  shown(&s, 0);
+
+  tk_merge_queue down = queue_of(0, p, n, 0, 1); /* gaffel did not answer */
+  check("source down is no news", !apply(&s, &down, 60000));
+  check("card stays with the kept PR",
+        tk_mq_phase_at(&s, 60000) == TK_MQ_STATIC && tk_mq_lead(&s) &&
+        tk_mq_lead(&s)->number == 7);
+  check("kept PR still counted", s.queue.count == 1);
+  check("source back is no news",
+        !apply(&s, &one, 120000) &&
+        tk_mq_phase_at(&s, 120000) == TK_MQ_STATIC);
+
+  /* A source that answered without the PR has dropped it: not kept. */
+  tk_merge_queue answered = queue_of(0, p, n, 0, 1);
+  source_up(&answered, "gaffel");
+  check("answering source drops it", !apply(&s, &answered, 130000) &&
+                                     tk_mq_phase_at(&s, 130000) ==
+                                         TK_MQ_HIDDEN);
+
+  /* A dismissal made while another source is down survives its return. */
+  tk_mq_init(&s);
+  apply(&s, &one, 0);
+  shown(&s, 0);
+  tk_mq_dismiss(&s);
+  apply(&s, &down, 10);
+  check("dismissed stays down after the source returns",
+        !apply(&s, &one, 20) &&
+        tk_mq_phase_at(&s, 20) == TK_MQ_HIDDEN);
+}
+
+/* Review finding 5: a list cut at eight is not complete. */
+static void test_truncated_list(void) {
+  static const char *const p[] = {"k", "k", "k", "k", "k", "k", "k", "k"};
+  static const int first8[] = {1, 2, 3, 4, 5, 6, 7, 8};
+  static const int shifted[] = {1, 2, 3, 4, 5, 6, 7, 9};
+  tk_mq_state s;
+  tk_mq_init(&s);
+  tk_merge_queue eight = queue_of(8, p, first8, 8, 0);
+  apply(&s, &eight, 0);
+  shown(&s, 0);
+  tk_mq_dismiss(&s);
+
+  /* A ninth PR exists only past the cut: the count alone is news. */
+  tk_merge_queue nine = queue_of(9, p, first8, 8, 0);
+  check("rising count past the cut is news", apply(&s, &nine, 10));
+  check("card up with the first listed",
+        tk_mq_phase_at(&s, 10) == TK_MQ_PULSE && tk_mq_lead(&s) &&
+        tk_mq_lead(&s)->number == 1);
+  shown(&s, 10);
+  tk_mq_dismiss(&s);
+
+  /* #8 pushed past the cut by #9 sorting in: its dismissal survives, and #9
+   * (never listed, never dismissed) is the news when it slides in. */
+  tk_merge_queue cut = queue_of(9, p, shifted, 8, 0);
+  check("#9 sliding in is news", apply(&s, &cut, 20) &&
+                                 tk_mq_lead(&s)->number == 9);
+  shown(&s, 20);
+  tk_mq_dismiss(&s);
+  check("#8 back from past the cut is no news",
+        !apply(&s, &nine, 30) &&
+        tk_mq_phase_at(&s, 30) == TK_MQ_HIDDEN);
+}
+
+/* Review finding 6: news behind Needs You keeps its pulse until shown. */
+static void test_pulse_waits_for_the_glass(void) {
+  static const char *const p[] = {"kvitt"};
+  static const int n[] = {134};
+  tk_mq_state s;
+  tk_mq_init(&s);
+  tk_merge_queue q = queue_of(1, p, n, 1, 0);
+  apply(&s, &q, 0);
+  /* Not shown for two minutes (the surface was busy). */
+  check("still owed a minute later",
+        tk_mq_phase_at(&s, 120000) == TK_MQ_PULSE);
+  shown(&s, 120000);
+  check("full pulse once shown",
+        tk_mq_phase_at(&s, 120000 + TK_MQ_PULSE_MS - 1) == TK_MQ_PULSE &&
+        tk_mq_phase_at(&s, 120000 + TK_MQ_PULSE_MS) == TK_MQ_STATIC);
+}
+
+static void test_long_title_is_cut_on_a_boundary(void) {
+  char json[1024];
+  char title[400];
+  size_t at = 0;
+  for (int i = 0; i < 60; i++) { /* 120 bytes of 'ö' */
+    title[at++] = (char)0xc3;
+    title[at++] = (char)0xb6;
+  }
+  for (int i = 0; i < 10; i++) title[at++] = 'x';
+  title[at] = '\0';
+  snprintf(json, sizeof json,
+           "{\"v\":1,\"enabled\":true,\"count\":1,\"incomplete\":false,"
+           "\"sources\":[{\"project\":\"k\",\"up\":true,\"paused\":false}],"
+           "\"prs\":[{\"project\":\"k\",\"number\":1,\"title\":\"%s\"}]}",
+           title);
+  tk_merge_queue value;
+  check("long title parses", tk_merge_queue_parse(json, strlen(json), &value));
+  size_t len = strlen(value.prs[0].title);
+  check("fits the cap", len < TK_MQ_TITLE_CAP);
+  check("ends in an ellipsis",
+        len >= 3 && strcmp(value.prs[0].title + len - 3, "\xe2\x80\xa6") == 0);
+  check("cut on a character boundary",
+        ((unsigned char)value.prs[0].title[len - 4] & 0xC0) != 0xC0);
+  check("up source recorded",
+        value.up_count == 1 && value.up_projects[0] == tk_mq_project_key("k"));
+
+  char many[4096];
+  int w = snprintf(many, sizeof many,
+      "{\"v\":1,\"enabled\":true,\"count\":0,\"incomplete\":false,"
+      "\"sources\":[");
+  for (int i = 0; i <= TK_MQ_SOURCE_CAP; i++) {
+    w += snprintf(many + w, sizeof many - (size_t)w,
+                  "%s{\"project\":null,\"up\":false,\"paused\":false}",
+                  i ? "," : "");
+  }
+  snprintf(many + w, sizeof many - (size_t)w, "],\"prs\":[]}");
+  rejected_unchanged("more sources than the configuration allows", many);
+  rejected_unchanged("an up source without a project",
+      "{\"v\":1,\"enabled\":true,\"count\":0,\"incomplete\":false,"
+      "\"sources\":[{\"project\":null,\"up\":true,\"paused\":false}],"
+      "\"prs\":[]}");
 }
 
 static void test_title_label(void) {
@@ -226,6 +380,11 @@ int main(void) {
   test_title_label();
   test_parse();
   test_policy();
+  test_dismissed_does_not_return();
+  test_incomplete_keeps_and_does_not_replay();
+  test_truncated_list();
+  test_pulse_waits_for_the_glass();
+  test_long_title_is_cut_on_a_boundary();
   if (failures) {
     printf("%d merge-queue failures\n", failures);
     return 1;

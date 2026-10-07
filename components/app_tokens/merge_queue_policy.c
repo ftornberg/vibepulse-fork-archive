@@ -6,10 +6,7 @@
 /* FNV-1a over "project#number". A collision would only merge two cards into
  * one dismissal; nothing is ever sent or acted on from this key. */
 uint32_t tk_mq_key(const tk_mq_pr *pr) {
-  uint32_t hash = 2166136261u;
-  for (const char *c = pr->project; *c; c++) {
-    hash = (hash ^ (uint8_t)*c) * 16777619u;
-  }
+  uint32_t hash = tk_mq_project_key(pr->project);
   hash = (hash ^ '#') * 16777619u;
   uint32_t number = (uint32_t)pr->number;
   for (int i = 0; i < 4; i++) {
@@ -42,54 +39,112 @@ void tk_mq_init(tk_mq_state *state) {
   state->lead = -1;
 }
 
-bool tk_mq_apply(tk_mq_state *state, const tk_merge_queue *queue,
-                 uint64_t now_ms) {
+static void hide(tk_mq_state *state) {
+  state->showing = false;
+  state->pulse_owed = false;
+  state->pulse_until_ms = 0;
+  state->lead = -1;
+}
+
+static bool source_up(const tk_merge_queue *queue, const char *project) {
+  uint32_t key = tk_mq_project_key(project);
+  for (uint8_t i = 0; i < queue->up_count; i++) {
+    if (queue->up_projects[i] == key) return true;
+  }
+  return false;
+}
+
+bool tk_mq_apply(tk_mq_state *state, tk_merge_queue *queue, uint64_t now_ms) {
+  (void)now_ms; /* a pulse is timed from when it is shown, not from here */
   if (!state || !queue) return false;
-  state->queue = *queue;
-  uint8_t listed = queue->enabled ? queue->pr_count : 0;
+  if (!queue->enabled) {
+    state->queue = *queue;
+    state->present_count = 0;
+    state->unseen_beyond = false;
+    hide(state);
+    return false;
+  }
+
+  /* Entries from sources that did not answer are kept: an incomplete list
+   * says nothing about them. A source that answered without one has
+   * dropped it (merged, closed), so that one goes. */
+  tk_merge_queue *next = queue;
+  const tk_merge_queue *previous = &state->queue;
+  if (queue->incomplete && previous->enabled) {
+    for (uint8_t i = 0; i < previous->pr_count &&
+                        next->pr_count < TK_MQ_LIST_CAP; i++) {
+      const tk_mq_pr *old = &previous->prs[i];
+      uint32_t key = tk_mq_key(old);
+      bool listed = false;
+      for (uint8_t j = 0; j < next->pr_count && !listed; j++) {
+        listed = tk_mq_key(&next->prs[j]) == key;
+      }
+      if (listed || source_up(queue, old->project)) continue;
+      next->prs[next->pr_count++] = *old;
+      next->count++;
+    }
+  }
 
   uint32_t keys[TK_MQ_LIST_CAP];
-  for (uint8_t i = 0; i < listed; i++) keys[i] = tk_mq_key(&queue->prs[i]);
+  for (uint8_t i = 0; i < next->pr_count; i++) {
+    keys[i] = tk_mq_key(&next->prs[i]);
+  }
 
-  /* A complete list is the truth: forget dismissals for pull requests that
-   * are gone (merged or closed), so a reopened one counts as new. An
-   * incomplete list proves nothing about the missing ones. */
-  if (queue->enabled && !queue->incomplete) {
+  /* Only a complete, uncut list is the truth: forget dismissals for pull
+   * requests that are gone, so a reopened one counts as new. One pushed past
+   * the cut of eight is still there. */
+  if (!next->incomplete && next->count == next->pr_count) {
     uint8_t kept = 0;
     for (uint8_t i = 0; i < state->acked_count; i++) {
-      if (contains(keys, listed, state->acked[i])) {
+      if (contains(keys, next->pr_count, state->acked[i])) {
         state->acked[kept++] = state->acked[i];
       }
     }
     state->acked_count = kept;
   }
 
-  bool pulse = false;
+  bool news = false;
   int8_t lead = -1;
-  for (uint8_t i = 0; i < listed; i++) {
+  for (uint8_t i = 0; i < next->pr_count; i++) {
     bool unseen = !contains(state->acked, state->acked_count, keys[i]);
     bool arrived = !contains(state->present, state->present_count, keys[i]);
     if (unseen && lead < 0) lead = (int8_t)i;
-    if (unseen && arrived) pulse = true;
+    if (unseen && arrived) news = true;
   }
-  memcpy(state->present, keys, listed * sizeof keys[0]);
-  state->present_count = listed;
 
-  if (listed == 0) {
-    state->showing = false;
-    state->lead = -1;
+  /* Past the cut only the count speaks: more hidden than before is news the
+   * list cannot name. */
+  int32_t hidden = next->count - next->pr_count;
+  int32_t hidden_before = previous->enabled
+                              ? previous->count - previous->pr_count : 0;
+  if (hidden > hidden_before) {
+    state->unseen_beyond = true;
+    news = true;
+  } else if (hidden == 0) {
+    state->unseen_beyond = false;
+  }
+
+  state->queue = *next;
+  memcpy(state->present, keys, next->pr_count * sizeof keys[0]);
+  state->present_count = next->pr_count;
+
+  if (lead < 0 && !(state->unseen_beyond && next->pr_count > 0)) {
+    /* Nothing left the person has not seen: the card goes, also when
+     * dismissed pull requests remain. */
+    hide(state);
     return false;
   }
-  if (pulse) {
-    state->showing = true;
-    state->pulse_until_ms = now_ms + TK_MQ_PULSE_MS;
-  }
-  if (state->showing) {
-    /* Everything unseen may have gone while the rest stayed: still up,
-     * leading with the first listed. */
-    state->lead = lead >= 0 ? lead : 0;
-  }
-  return pulse;
+  state->showing = true;
+  state->lead = lead >= 0 ? lead : 0;
+  if (news) state->pulse_owed = true;
+  return news;
+}
+
+void tk_mq_shown(tk_mq_state *state, uint64_t now_ms) {
+  if (!state || !state->showing || !state->pulse_owed) return;
+  state->pulse_owed = false;
+  state->pulse_until_ms = now_ms + TK_MQ_PULSE_MS;
+  state->pulse_epoch++;
 }
 
 void tk_mq_dismiss(tk_mq_state *state) {
@@ -97,15 +152,16 @@ void tk_mq_dismiss(tk_mq_state *state) {
   for (uint8_t i = 0; i < state->present_count; i++) {
     ack(state, state->present[i]);
   }
-  state->showing = false;
-  state->lead = -1;
+  state->unseen_beyond = false;
+  hide(state);
 }
 
 tk_mq_phase tk_mq_phase_at(const tk_mq_state *state, uint64_t now_ms) {
   if (!state || !state->showing || state->present_count == 0) {
     return TK_MQ_HIDDEN;
   }
-  return now_ms < state->pulse_until_ms ? TK_MQ_PULSE : TK_MQ_STATIC;
+  return state->pulse_owed || now_ms < state->pulse_until_ms ? TK_MQ_PULSE
+                                                              : TK_MQ_STATIC;
 }
 
 const tk_mq_pr *tk_mq_lead(const tk_mq_state *state) {

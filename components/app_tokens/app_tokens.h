@@ -51,7 +51,7 @@ void tokens_apply_github(const tk_github_status *status);
 
 /* One strict /api/merge-queue payload: reviewed pull requests waiting for a
  * person to merge them. Drives the green "ready to merge" card. */
-void tokens_apply_merge_queue(const tk_merge_queue *queue);
+void tokens_apply_merge_queue(tk_merge_queue *queue);
 
 /* Targetets 1 Hz-hämtning. Utan TK_AGENT_STATUS_URL loggas avstängt läge
  * och ingen task eller HTTP-klient skapas. */

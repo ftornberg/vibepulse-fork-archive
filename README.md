@@ -276,7 +276,8 @@ tap dismisses it until a new one arrives. A **NEEDS YOU** prompt or a
 finished agent always wins the glass. Point the host at each orchestrator's
 loopback port with `vibepulse_setup.py merge-queue add <port>`. Titles stay
 on your LAN and never go to a relay; an orchestrator that is down is
-reported as such instead of counted as zero.
+reported as such instead of counted as zero. The 2.16-inch panel only for
+now; `#define TK_MERGE_QUEUE 0` in `secrets.h` leaves it out of the build.
 
 ### Optional GitHub project pulse
 
