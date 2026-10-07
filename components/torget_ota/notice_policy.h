@@ -51,4 +51,13 @@ tg_notice_action tg_notice_update(tg_notice_policy *policy,
 /* Användarens tryck på takeovern: göm och starta tjatklockan. */
 void tg_notice_dismiss(tg_notice_policy *policy, int64_t now_us);
 
+/* Vad GLASET ska göra för att stämma med policyn, frågat varje poll. Nivå,
+ * inte händelse: tg_notice_dismiss ger ingen HIDE ur tg_notice_update, och
+ * overlayn hoppar över en ritning när UI-låset är upptaget, så en engångs-
+ * händelse kan gå förlorad. Då låg UPDATE READY kvar med döda pillar och
+ * avstängt KEY3-håll tills panelen startades om (2026-10-07). busy: det öppna
+ * fönstret äger overlayn och ritar sitt eget läge. */
+tg_notice_action tg_notice_glass(const tg_notice_policy *policy,
+                                 bool glass_shows_notice, bool busy);
+
 #endif
