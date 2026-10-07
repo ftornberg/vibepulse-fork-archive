@@ -39,6 +39,7 @@
 #include "needs_you_send_policy.h"
 #include "agent_status_parse.h"
 #include "github_status_parse.h"
+#include "merge_queue_parse.h"
 #include "max_tracker_parse.h"
 #include "boot_screen.h"
 #include "ota_ui.h"
@@ -505,6 +506,19 @@ static void apply_battery_fixture(int idx) {
   char text[40];
   tg_batt_power_text(s, &v, text, sizeof text);
   torget_settings_set_power(text);
+}
+
+static void apply_merge_queue_file(const char *file) {
+  size_t len = 0;
+  char *json = read_fixture(file, &len);
+  tk_merge_queue queue;
+  if (json && tk_merge_queue_parse(json, len, &queue)) {
+    tokens_apply_merge_queue(&queue);
+    printf("merge-queue: %s (%d)\n", file, (int)queue.count);
+  } else {
+    printf("merge-queue: %s avvisad\n", file);
+  }
+  free(json);
 }
 
 static void apply_github_file(const char *file, bool unique_event) {
@@ -1483,6 +1497,44 @@ static int run_vibepulse_static_qa(void) {
   tokens_apply_agent_status(&attention);
   dump_frame("vibepulse-claude-swedish-project");
   tk_agent_monitor_dismiss_current();
+
+  /* "Ready to merge": the green card on the completion surface. One PR with
+   * its title, several across projects, an over-long title (dots, and a
+   * glyph the face cannot draw), a PR without a title, then the order of
+   * precedence: a waiting agent outranks the merge card, which comes back
+   * when the agent card is dismissed. Each step dismisses so the next is
+   * news. */
+  apply_merge_queue_file("merge-queue-one.json");
+  dump_frame("vibepulse-merge-one");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-many.json");
+  dump_frame("vibepulse-merge-many");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-long.json");
+  dump_frame("vibepulse-merge-long-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-no-title.json");
+  dump_frame("vibepulse-merge-no-title");
+  tk_agent_monitor_dismiss_merge();
+  apply_merge_queue_file("merge-queue-empty.json");
+
+  apply_merge_queue_file("merge-queue-one.json");
+  attention = static_attention_snapshot(
+      TK_AGENT_PROVIDER_CLAUDE, TK_AGENT_WAITING,
+      "capture-claude-over-merge", "Torget");
+  tokens_apply_agent_status(&attention);
+  dump_frame("vibepulse-merge-yields-to-waiting");
+  tk_agent_monitor_dismiss_current();
+  dump_frame("vibepulse-merge-after-waiting");
+  tk_agent_monitor_dismiss_merge();
+  dump_frame("vibepulse-merge-dismissed");
+  apply_merge_queue_file("merge-queue-empty.json");
 
   /* Tourens två tracker-dumpar (case 15-18 i platform_tour_cb) återanvänder
    * NAMNEN "vibepulse-tracker-claude"/"-codex" för en berättande
