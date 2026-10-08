@@ -521,7 +521,7 @@ capabilities:
     resources: ["AXP2101 PWRON input", "power rails"]
     constraints:
       - "handled by the PMIC itself, not by the SoC or the firmware: a long press cuts the rails"
-      - "verified on torget-216-02 only (2026-10-08): a long press powered the panel off with USB connected and the USB device left the host; power-on by a short press is the vendor's description, not yet observed"
+      - "verified on torget-216-02 only (2026-10-08): a long press powered the panel off with USB connected and the USB device left the host; a long press of about the same length powered it on again, and a short press did nothing, against the vendor's short-press power-on"
       - "press duration not timed; the AXP2101 default is in the seconds"
       - "the firmware cannot see the press before the rails are cut; a clean shutdown path would need the PMIC's IRQ, which is not wired in software"
     conflicts: []

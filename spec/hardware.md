@@ -67,8 +67,9 @@ openocd före nästa flashning (samma USB-enhet).
 
 - **Långt tryck stänger av panelen, även med USB i.** Spänningen bryts av
   PMU:n: USB-enheten försvann från Macen. Firmwaren ser inget innan dess.
-- Kort tryck för att starta är leverantörens beskrivning; inte observerat än.
-  Starten bör vara en riktig strömstart (RTC-vägen, `tid från RTC`).
+- **Start kräver också ett långt tryck**, ungefär lika långt som avstängningen;
+  ett kort tryck gör inget (ägaren 2026-10-08, mot leverantörens "kort tryck").
+  Starten bör vara en riktig strömstart (RTC-vägen, `tid från RTC`), ej läst.
 
 ## WiFi-fakta (verifierade på hårdvara 2026-08-06)
 

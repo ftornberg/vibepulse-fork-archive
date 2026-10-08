@@ -12,6 +12,7 @@ sources:
     unit: torget-216-02
     tests:
       - pwr-long-press-powers-off-with-usb-2026-10-08
+      - pwr-long-press-powers-on-2026-10-08
 
   - id: torget-physical-2026-10-05-tid-sound
     kind: physical-test
